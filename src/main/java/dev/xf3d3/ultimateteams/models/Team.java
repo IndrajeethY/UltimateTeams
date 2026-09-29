@@ -31,13 +31,11 @@ public class Team {
     @Expose
     @Builder.Default
     @Getter
-    @Setter
     private double balance = 0;
 
     @Expose
     @Builder.Default
     @Getter
-    @Setter
     private double join_fee = 0;
 
     @Expose
@@ -223,18 +221,48 @@ public class Team {
         return getRelationWith(otherTeam) == relation && otherTeam.getRelationWith(this) == relation;
     }
 
-    public void addBalance(double balance) {
-        this.balance += balance;
+    /** Validate existing state too: Gson and legacy builders bypass setters. */
+    public synchronized boolean hasValidEconomy() {
+        return Double.isFinite(balance) && balance >= 0
+                && Double.isFinite(join_fee) && join_fee >= 0;
     }
 
-    public boolean subBalance(double amount) {
-        if (amount <= 0) return false; // prevent negative/zero
-        if (amount > this.balance) return false; // not enough funds
+    public synchronized void setBalance(double balance) {
+        requireNonNegativeMoney(balance);
+        this.balance = balance;
+    }
 
-        this.balance -= amount;
+    public synchronized void setJoin_fee(double amount) {
+        requireNonNegativeMoney(amount);
+        this.join_fee = amount;
+    }
+
+    private static void requireNonNegativeMoney(double amount) {
+        if (!Double.isFinite(amount) || amount < 0) {
+            throw new IllegalArgumentException("Money must be finite and non-negative");
+        }
+    }
+
+    public synchronized boolean canAddBalance(double amount) {
+        double result = balance + amount;
+        return hasValidEconomy() && Double.isFinite(amount) && amount >= 0
+                && Double.isFinite(result) && (amount == 0 || result > balance);
+    }
+
+    public synchronized void addBalance(double amount) {
+        if (!canAddBalance(amount)) {
+            throw new IllegalArgumentException("Invalid credit or corrupt team economy");
+        }
+        balance += amount;
+    }
+
+    public synchronized boolean subBalance(double amount) {
+        if (!hasValidEconomy() || !Double.isFinite(amount) || amount <= 0
+                || amount > balance || balance - amount >= balance) return false;
+
+        balance -= amount;
         return true;
     }
-
 
 
     public enum Relation {

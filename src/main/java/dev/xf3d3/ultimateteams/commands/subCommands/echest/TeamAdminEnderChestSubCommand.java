@@ -248,6 +248,11 @@ public class TeamAdminEnderChestSubCommand {
             return;
         }
 
+        if (plugin.getSettings().getCrossServer().isEnable()) {
+            sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getUnsafeCrossServerOperation()));
+            return;
+        }
+
         teamEnderChestSubCommand.openDirectEnderChest(player, team, chestNumber);
 
         

@@ -32,13 +32,13 @@ public class TeamManagersSubCommand {
         plugin.getTeamStorageUtil().findTeamByMember(player.getUniqueId()).ifPresentOrElse(
                 team -> {
                     // Check permission
-                    if (!(plugin.getTeamStorageUtil().isTeamOwner(player) || (plugin.getTeamStorageUtil().isTeamManager(player) && team.hasPermission(Team.Permission.PROMOTE)))) {
+                    if (!(team.getOwner().equals(player.getUniqueId()) || (team.getMembers().getOrDefault(player.getUniqueId(), 0) == 2 && team.hasPermission(Team.Permission.PROMOTE)))) {
                         sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
                         return;
                     }
 
 
-                    if (player.getName().equalsIgnoreCase(offlinePlayer.getName())) {
+                    if (player.getUniqueId().equals(offlinePlayer.getUniqueId())) {
                         player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getManager().getPromoteSelfError()));
 
                         return;
@@ -46,9 +46,14 @@ public class TeamManagersSubCommand {
 
                     if (!team.getMembers().containsKey(offlinePlayer.getUniqueId())) {
                         player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getKick().getTargetNotInTeam().replace(PLAYER_TO_KICK, offlinePlayer.getName())));
+                        return;
                     }
 
-                    team.getMembers().put(offlinePlayer.getUniqueId(), 2);
+                    // Promotion must never demote the owner or create membership.
+                    if (!team.getMembers().replace(offlinePlayer.getUniqueId(), 1, 2)) {
+                        sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
+                        return;
+                    }
                     plugin.runAsync(task -> plugin.getTeamStorageUtil().updateTeamData(player, team));
 
                     player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getManager().getPromoteSuccessful().replace("%PLAYER%", offlinePlayer.getName())));
@@ -76,7 +81,7 @@ public class TeamManagersSubCommand {
         plugin.getTeamStorageUtil().findTeamByOwner(player.getUniqueId()).ifPresentOrElse(
                 team -> {
 
-                    if (player.getName().equalsIgnoreCase(offlinePlayer.getName())) {
+                    if (player.getUniqueId().equals(offlinePlayer.getUniqueId())) {
                         player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getManager().getDemoteSelfError()));
 
                         return;
@@ -85,9 +90,13 @@ public class TeamManagersSubCommand {
                     if (!team.getMembers().containsKey(offlinePlayer.getUniqueId())) {
 
                         player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getKick().getTargetNotInTeam().replace(PLAYER_TO_KICK, offlinePlayer.getName())));
+                        return;
                     }
 
-                    team.getMembers().put(offlinePlayer.getUniqueId(), 1);
+                    if (!team.getMembers().replace(offlinePlayer.getUniqueId(), 2, 1)) {
+                        sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
+                        return;
+                    }
                     plugin.runAsync(task -> plugin.getTeamStorageUtil().updateTeamData(player, team));
 
                     player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getManager().getDemoteSuccessful().replace("%PLAYER%", offlinePlayer.getName())));

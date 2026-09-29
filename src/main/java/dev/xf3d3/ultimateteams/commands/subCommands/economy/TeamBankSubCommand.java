@@ -29,52 +29,56 @@ public class TeamBankSubCommand {
             return;
         }
 
+        if (plugin.getSettings().getCrossServer().isEnable()) {
+            player.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getUnsafeCrossServerOperation()));
+            return;
+        }
+
         plugin.getTeamStorageUtil().findTeamByMember(player.getUniqueId()).ifPresentOrElse(
                 team -> {
-                    // Check permission
-                    if (!(plugin.getTeamStorageUtil().isTeamOwner(player) || (plugin.getTeamStorageUtil().isTeamManager(player) && team.hasPermission(Team.Permission.DEPOSIT)))) {
-                        sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
-                        return;
-                    }
+                    synchronized (team) {
+                        // Check permission
+                        if (!(team.getOwner().equals(player.getUniqueId()) || (team.getMembers().getOrDefault(player.getUniqueId(), 0) == 2 && team.hasPermission(Team.Permission.DEPOSIT)))) {
+                            sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
+                            return;
+                        }
 
-                    if (!plugin.getEconomyHook().hasMoney(player, amount)) {
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getNotEnoughMoney()
-                                .replace("%MONEY%", String.valueOf(amount))
-                        ));
+                        if (!validAmount(player, team, amount) || !team.canAddBalance(amount)) return;
 
-                        return;
-                    }
+                        if (!plugin.getEconomyHook().hasMoney(player, amount)) {
+                            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getNotEnoughMoney()
+                                    .replace("%MONEY%", String.valueOf(amount))));
+                            return;
+                        }
 
-                    if (amount <= 0) {
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidAmount()
-                                .replace("%MONEY%", String.valueOf(amount))
-                        ));
+                        if (plugin.getSettings().getEconomy().getTeamBank().isBankLimit() && team.getBalance() + amount > plugin.getSettings().getEconomy().getTeamBank().getLimit()) {
+                            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getLimitReached()
+                                    .replace("%LIMIT%", String.valueOf(plugin.getSettings().getEconomy().getTeamBank().getLimit()))
+                                    .replace("%CURRENCY%", plugin.getSettings().getEconomy().getTeamBank().getLimit() == 1 ? plugin.getEconomyHook().getCurrencyNameSingular() : plugin.getEconomyHook().getCurrencyNamePlural())
+                            ));
 
-                        return;
-                    }
-
-                    if (plugin.getSettings().getEconomy().getTeamBank().isBankLimit() && team.getBalance() + amount > plugin.getSettings().getEconomy().getTeamBank().getLimit()) {
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getLimitReached()
-                                .replace("%LIMIT%", String.valueOf(plugin.getSettings().getEconomy().getTeamBank().getLimit()))
-                                .replace("%CURRENCY%", plugin.getSettings().getEconomy().getTeamBank().getLimit() == 1 ? plugin.getEconomyHook().getCurrencyNameSingular() : plugin.getEconomyHook().getCurrencyNamePlural())
-                        ));
-
-                        return;
-                    }
+                            return;
+                        }
 
 
-                    if (!(new TeamBankDepositEvent(player, team, team.getBalance(), team.getBalance() + amount).callEvent())) return;
+                        if (!(new TeamBankDepositEvent(player, team, team.getBalance(), team.getBalance() + amount).callEvent())) return;
 
-                    if (plugin.getEconomyHook().takeMoney(player, amount)) {
-                        String currencyName = amount == 1 ? plugin.getEconomyHook().getCurrencyNameSingular() : plugin.getEconomyHook().getCurrencyNamePlural();
+                        // Event listeners may have changed the balance synchronously.
+                        if (!validAmount(player, team, amount) || !team.canAddBalance(amount)
+                                || (plugin.getSettings().getEconomy().getTeamBank().isBankLimit()
+                                && team.getBalance() + amount > plugin.getSettings().getEconomy().getTeamBank().getLimit())) return;
 
-                        team.addBalance(amount);
+                        if (plugin.getEconomyHook().takeMoney(player, amount)) {
+                            String currencyName = amount == 1 ? plugin.getEconomyHook().getCurrencyNameSingular() : plugin.getEconomyHook().getCurrencyNamePlural();
 
-                        plugin.runAsync(task -> plugin.getTeamStorageUtil().updateTeamData(player, team));
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getDeposited()
-                                .replace("%MONEY%", String.valueOf(amount))
-                                .replace("%CURRENCY%", currencyName)
-                        ));
+                            team.addBalance(amount);
+
+                            plugin.runAsync(task -> plugin.getTeamStorageUtil().updateTeamData(player, team));
+                            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getDeposited()
+                                    .replace("%MONEY%", String.valueOf(amount))
+                                    .replace("%CURRENCY%", currencyName)
+                            ));
+                        }
                     }
                 },
                 () -> sender.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getInfo().getNotInTeam()))
@@ -93,43 +97,77 @@ public class TeamBankSubCommand {
             return;
         }
 
+        if (plugin.getSettings().getCrossServer().isEnable()) {
+            player.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getUnsafeCrossServerOperation()));
+            return;
+        }
+
         plugin.getTeamStorageUtil().findTeamByMember(player.getUniqueId()).ifPresentOrElse(
                 team -> {
-                    // Check permission
-                    if (!(plugin.getTeamStorageUtil().isTeamOwner(player) || (plugin.getTeamStorageUtil().isTeamManager(player) && team.hasPermission(Team.Permission.WITHDRAW)))) {
-                        sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
-                        return;
-                    }
+                    synchronized (team) {
+                        // Check permission
+                        if (!(team.getOwner().equals(player.getUniqueId()) || (team.getMembers().getOrDefault(player.getUniqueId(), 0) == 2 && team.hasPermission(Team.Permission.WITHDRAW)))) {
+                            sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
+                            return;
+                        }
 
-                    if (amount <= 0) {
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidAmount()
-                                .replace("%MONEY%", String.valueOf(amount))
-                        ));
-                        return;
-                    }
+                        if (!validAmount(player, team, amount)) return;
 
-                    if (amount > team.getBalance()) {
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getWithdraw().getNotEnoughFunds()
-                                .replace("%MONEY%", String.valueOf(amount))
-                        ));
-                        return;
-                    };
+                        if (amount > team.getBalance()) {
+                            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getWithdraw().getNotEnoughFunds()
+                                    .replace("%MONEY%", String.valueOf(amount))
+                            ));
+                            return;
+                        }
 
-                    if (!(new TeamBankWithdrawEvent(player, team, team.getBalance(), team.getBalance() - amount).callEvent())) return;
+                        if (!(new TeamBankWithdrawEvent(player, team, team.getBalance(), team.getBalance() - amount).callEvent())) return;
 
-                    if (team.subBalance(amount)) {
-                        plugin.runAsync(task -> plugin.getTeamStorageUtil().updateTeamData(player, team));
+                        double previousBalance = team.getBalance();
+                        if (team.subBalance(amount)) {
+                            // Keep the debit if the provider throws: its outcome is unknown.
+                            // Only an explicit failed response is safe to compensate.
+                            try {
+                                if (!plugin.getEconomyHook().tryGiveMoney(player, amount)) {
+                                    team.setBalance(previousBalance);
+                                    player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getTransactionFailed()));
+                                    return;
+                                }
+                            } catch (RuntimeException exception) {
+                                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                                        "Unknown withdrawal outcome for team " + team.getId()
+                                                + ", player " + player.getUniqueId() + ", amount " + amount,
+                                        exception);
+                                player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getTransactionFailed()));
+                                return;
+                            } finally {
+                                plugin.runAsync(task -> plugin.getTeamStorageUtil().updateTeamData(player, team));
+                            }
 
-                        String currencyName = amount == 1 ? plugin.getEconomyHook().getCurrencyNameSingular() : plugin.getEconomyHook().getCurrencyNamePlural();
-                        plugin.getEconomyHook().giveMoney(player, amount);
+                            String currencyName = amount == 1 ? plugin.getEconomyHook().getCurrencyNameSingular() : plugin.getEconomyHook().getCurrencyNamePlural();
 
-                        player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getWithdraw().getSuccess()
-                                .replace("%MONEY%", String.valueOf(amount))
-                                .replace("%CURRENCY%", currencyName)
-                        ));
+                            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getWithdraw().getSuccess()
+                                    .replace("%MONEY%", String.valueOf(amount))
+                                    .replace("%CURRENCY%", currencyName)
+                            ));
+                        }
                     }
                 },
                 () -> sender.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getInfo().getNotInTeam()))
         );
     }
+
+    private boolean validAmount(Player player, Team team, double amount) {
+        if (!team.hasValidEconomy()) {
+            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidTeamEconomy()));
+            plugin.getLogger().warning("Blocked money operation on corrupt team " + team.getId());
+            return false;
+        }
+        if (!Double.isFinite(amount) || amount <= 0) {
+            player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidAmount()
+                    .replace("%MONEY%", String.valueOf(amount))));
+            return false;
+        }
+        return true;
+    }
+
 }

@@ -479,6 +479,8 @@ public class Messages {
     public static class EconomySettings {
         @Comment("Economy")
         private String notEnoughMoney = "[You don't have enough money for this action. Required balance is:](dark_aqua) [%MONEY%](gold)";
+        private String invalidTeamEconomy = "[The team economy is unavailable. Contact an administrator.](red)";
+        private String transactionFailed = "[The money transfer failed. Contact an administrator if your balance changed.](red)";
         private String invalidAmount = "[%MONEY%](gold) [is not a valid amount](dark_aqua)";
         private String limitReached = "[You reached the bank limit](dark_aqua) [%CURRENCY%%LIMIT%](gold)[!](dark_aqua)";
         private String deposited = "[You have successfully deposited](dark_aqua) [%CURRENCY%%MONEY%](gold) [in the team bank](dark_aqua)";
@@ -505,6 +507,7 @@ public class Messages {
         private String playerNotFound = "[The player doesn't exist.](dark_aqua)";
         private String mustBeOwner = "[You must be the team owner to do this.](dark_aqua)";
         private String teamNotFound = "[The team doesn't exist.](dark_aqua)";
+        private String unsafeCrossServerOperation = "[This action is unavailable while cross-server mode is enabled.](red)";
         private String functionDisabled = "[Sorry, that has been disabled. :(](dark_aqua)";
         private String noPermission = "[You don't have permission to do that.](red)";
         private String pluginReloadBegin = "[UltimateTeams:](gold) [Beginning plugin reload...](green)";

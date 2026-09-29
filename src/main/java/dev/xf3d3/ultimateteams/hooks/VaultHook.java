@@ -23,7 +23,7 @@ public class VaultHook {
     }
 
     public boolean hasMoney(@NotNull Player player, @NotNull Double amount) {
-        return economyAPI.has(player, amount);
+        return validAmount(amount) && economyAPI.has(player, amount);
     }
 
     public String getCurrencyNameSingular() { return economyAPI.currencyNameSingular(); }
@@ -31,11 +31,20 @@ public class VaultHook {
     public String getCurrencyNamePlural() { return economyAPI.currencyNamePlural(); }
 
     public boolean takeMoney(@NotNull Player player, @NotNull Double amount) {
-        return economyAPI.withdrawPlayer(player, amount).transactionSuccess();
+        return validAmount(amount) && economyAPI.withdrawPlayer(player, amount).transactionSuccess();
     }
 
     public void giveMoney(@NotNull Player player, @NotNull Double amount) {
-        economyAPI.depositPlayer(player, amount);
+        tryGiveMoney(player, amount);
+    }
+
+    /** Keep giveMoney's existing API while exposing failures to transaction callers. */
+    public boolean tryGiveMoney(@NotNull Player player, @NotNull Double amount) {
+        return validAmount(amount) && economyAPI.depositPlayer(player, amount).transactionSuccess();
+    }
+
+    private static boolean validAmount(Double amount) {
+        return amount != null && Double.isFinite(amount) && amount >= 0;
     }
 
     private void sendMessages() {

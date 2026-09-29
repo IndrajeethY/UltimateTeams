@@ -122,6 +122,11 @@ public class TeamEnderChestSubCommand implements Listener {
     }
 
     public void openDirectEnderChest(@NotNull Player viewer, @NotNull Team team, int chestNumber) {
+        // Local inventory locks cannot protect shared contents on another server.
+        if (plugin.getSettings().getCrossServer().isEnable()) {
+            viewer.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getUnsafeCrossServerOperation()));
+            return;
+        }
         if (!team.hasEnderChest(chestNumber)) {
             viewer.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getEchest().getNotExist()
                     .replace("%NUMBER%", String.valueOf(chestNumber))));
@@ -230,6 +235,11 @@ public class TeamEnderChestSubCommand implements Listener {
         }
 
         Team team = teamOpt.get();
+
+        if (plugin.getSettings().getCrossServer().isEnable()) {
+            player.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getUnsafeCrossServerOperation()));
+            return;
+        }
 
         openDirectEnderChest(player, team, chestNumber);
 

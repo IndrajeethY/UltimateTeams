@@ -30,7 +30,7 @@ public class TeamFeeSubCommand {
         plugin.getTeamStorageUtil().findTeamByMember(player.getUniqueId()).ifPresentOrElse(
                 team -> {
                     // Check permission
-                    if (!(plugin.getTeamStorageUtil().isTeamOwner(player) || (plugin.getTeamStorageUtil().isTeamManager(player) && team.hasPermission(Team.Permission.FEE)))) {
+                    if (!(team.getOwner().equals(player.getUniqueId()) || (team.getMembers().getOrDefault(player.getUniqueId(), 0) == 2 && team.hasPermission(Team.Permission.FEE)))) {
                         sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
                         return;
                     }
@@ -58,14 +58,15 @@ public class TeamFeeSubCommand {
         plugin.getTeamStorageUtil().findTeamByMember(player.getUniqueId()).ifPresentOrElse(
                 team -> {
                     // Check permission
-                    if (!(plugin.getTeamStorageUtil().isTeamOwner(player) || (plugin.getTeamStorageUtil().isTeamManager(player) && team.hasPermission(Team.Permission.FEE)))) {
+                    if (!(team.getOwner().equals(player.getUniqueId()) || (team.getMembers().getOrDefault(player.getUniqueId(), 0) == 2 && team.hasPermission(Team.Permission.FEE)))) {
                         sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
                         return;
                     }
 
-                    if (amount <= 0) {
+                    if (!Double.isFinite(amount) || amount <= 0) {
                         player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidAmount()
-                                .replace("%AMOUNT%", String.valueOf(team.getJoin_fee()))
+                                .replace("%AMOUNT%", String.valueOf(amount))
+                                .replace("%MONEY%", String.valueOf(amount))
                         ));
 
                         return;
@@ -105,7 +106,7 @@ public class TeamFeeSubCommand {
         plugin.getTeamStorageUtil().findTeamByMember(player.getUniqueId()).ifPresentOrElse(
                 team -> {
                     // Check permission
-                    if (!(plugin.getTeamStorageUtil().isTeamOwner(player) || (plugin.getTeamStorageUtil().isTeamManager(player) && team.hasPermission(Team.Permission.FEE)))) {
+                    if (!(team.getOwner().equals(player.getUniqueId()) || (team.getMembers().getOrDefault(player.getUniqueId(), 0) == 2 && team.hasPermission(Team.Permission.FEE)))) {
                         sender.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getNoPermission()));
                         return;
                     }

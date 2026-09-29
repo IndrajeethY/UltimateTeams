@@ -185,54 +185,79 @@ public class TeamInviteSubCommand {
         plugin.getTeamInviteUtil().getInvite(player.getUniqueId()).ifPresentOrElse(
                 invite -> plugin.getTeamStorageUtil().findTeamByMember(invite.getInviter()).ifPresentOrElse(
                         team -> {
+                            synchronized (team) {
+                                if (!team.hasValidEconomy()) {
+                                    player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidTeamEconomy()));
+                                    return;
+                                }
+                                boolean chargeFee = plugin.getEconomyHook() != null
+                                        && plugin.getSettings().getEconomy().getTeamJoinFee().isEnabled()
+                                        && team.getJoin_fee() > 0;
+                                if (chargeFee && plugin.getSettings().getCrossServer().isEnable()) {
+                                    player.sendMessage(MineDown.parse(plugin.getMessages().getGeneral().getUnsafeCrossServerOperation()));
+                                    return;
+                                }
+                                if (chargeFee && !team.canAddBalance(team.getJoin_fee())) {
+                                    player.sendMessage(MineDown.parse(plugin.getMessages().getEconomy().getInvalidTeamEconomy()));
+                                    return;
+                                }
 
-                            // Check if the join fee will exceed the bank limit
-                            if (
-                                    plugin.getEconomyHook() != null &&
-                                            plugin.getSettings().getEconomy().getTeamJoinFee().isEnabled() &&
-                                            plugin.getSettings().getEconomy().getTeamBank().isEnabled() &&
-                                            plugin.getSettings().getEconomy().getTeamBank().isBankLimit() &&
-                                            team.getBalance() + team.getJoin_fee() > plugin.getSettings().getEconomy().getTeamBank().getLimit()
-                            ) {
-                                player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getInvite().getFeeWillExceedLimit()
-                                        .replace("%LIMIT%", String.valueOf(plugin.getSettings().getEconomy().getTeamBank().getLimit()))
-                                        .replace("%CURRENCY%", plugin.getEconomyHook().getCurrencyNamePlural())
-                                ));
 
-                                return;
-                            }
-
-                            if (plugin.getEconomyHook() != null && team.getJoin_fee() > 0) {
-                                if (!plugin.getEconomyHook().takeMoney(player, team.getJoin_fee())) {
-                                    player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getFee().getCantJoinNotEnoughMoney()
-                                            .replace("%TEAM%",  team.getName())
-                                            .replace("%AMOUNT%", String.valueOf(team.getJoin_fee()))
+                                // Check if the join fee will exceed the bank limit
+                                if (
+                                        plugin.getEconomyHook() != null &&
+                                                plugin.getSettings().getEconomy().getTeamJoinFee().isEnabled() &&
+                                                plugin.getSettings().getEconomy().getTeamBank().isEnabled() &&
+                                                plugin.getSettings().getEconomy().getTeamBank().isBankLimit() &&
+                                                team.getBalance() + team.getJoin_fee() > plugin.getSettings().getEconomy().getTeamBank().getLimit()
+                                ) {
+                                    player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getInvite().getFeeWillExceedLimit()
+                                            .replace("%LIMIT%", String.valueOf(plugin.getSettings().getEconomy().getTeamBank().getLimit()))
+                                            .replace("%CURRENCY%", plugin.getEconomyHook().getCurrencyNamePlural())
                                     ));
 
                                     return;
                                 }
 
-                                team.addBalance(team.getJoin_fee());
-                                team.sendTeamMessage(MineDown.parse(plugin.getMessages().getTeam().getFee().getFeeDeposited()
-                                        .replace("%PLAYER%", player.getName())
-                                        .replace("%AMOUNT%", String.valueOf(team.getJoin_fee()))
-                                ));
+                                // Cancellation must happen before any fee is charged.
+                                double fee = team.getJoin_fee();
+                                if (!(new TeamMemberJoinEvent(player, team, TeamMemberJoinEvent.JoinReason.ACCEPT_INVITE).callEvent())) return;
+                                if (!team.hasValidEconomy() || team.getJoin_fee() != fee
+                                        || (chargeFee && (!team.canAddBalance(fee)
+                                        || (plugin.getSettings().getEconomy().getTeamBank().isEnabled()
+                                        && plugin.getSettings().getEconomy().getTeamBank().isBankLimit()
+                                        && team.getBalance() + fee > plugin.getSettings().getEconomy().getTeamBank().getLimit())))) return;
+
+                                if (chargeFee) {
+                                    if (!plugin.getEconomyHook().takeMoney(player, fee)) {
+                                        player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getFee().getCantJoinNotEnoughMoney()
+                                                .replace("%TEAM%",  team.getName())
+                                                .replace("%AMOUNT%", String.valueOf(team.getJoin_fee()))
+                                        ));
+
+                                        return;
+                                    }
+
+                                    team.addBalance(fee);
+                                    team.sendTeamMessage(MineDown.parse(plugin.getMessages().getTeam().getFee().getFeeDeposited()
+                                            .replace("%PLAYER%", player.getName())
+                                            .replace("%AMOUNT%", String.valueOf(team.getJoin_fee()))
+                                    ));
+                                }
+
+                                plugin.getTeamStorageUtil().addTeamMember(team, player);
+                                plugin.getTeamInviteUtil().acceptInvite(invite, player);
+
+                                player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getJoin().getSuccessful().replace(TEAM_PLACEHOLDER, team.getName())));
+
+                                if (!plugin.getSettings().getTeam().getJoin().isAnnounce())
+                                    return;
+
+                                // Send message to team members
+                                team.sendTeamMessage(MineDown.parse(plugin.getMessages().getTeam().getJoin().getBroadcastChat()
+                                        .replace(PLAYER_PLACEHOLDER, player.getName())
+                                        .replace(TEAM_PLACEHOLDER, Utils.Color(team.getName()))));
                             }
-
-                            if (!(new TeamMemberJoinEvent(player, team, TeamMemberJoinEvent.JoinReason.ACCEPT_INVITE).callEvent())) return;
-
-                            plugin.getTeamStorageUtil().addTeamMember(team, player);
-                            plugin.getTeamInviteUtil().acceptInvite(invite, player);
-
-                            player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getJoin().getSuccessful().replace(TEAM_PLACEHOLDER, team.getName())));
-
-                            if (!plugin.getSettings().getTeam().getJoin().isAnnounce())
-                                return;
-
-                            // Send message to team members
-                            team.sendTeamMessage(MineDown.parse(plugin.getMessages().getTeam().getJoin().getBroadcastChat()
-                                    .replace(PLAYER_PLACEHOLDER, player.getName())
-                                    .replace(TEAM_PLACEHOLDER, Utils.Color(team.getName()))));
                         },
                         () -> player.sendMessage(MineDown.parse(plugin.getMessages().getTeam().getJoin().getFailedNoValidTeam()))
                 ),
